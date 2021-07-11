@@ -613,6 +613,8 @@ typedef struct RedisModuleDigest {
 #define LRU_CLOCK_RESOLUTION 1000 /* LRU clock resolution in ms */
 
 #define OBJ_SHARED_REFCOUNT INT_MAX
+
+// redisObject数据类型：string hash list set sortedSet
 typedef struct redisObject {
     unsigned type:4;
     unsigned encoding:4;
@@ -645,7 +647,9 @@ typedef struct clientReplyBlock {
 
 /* Redis database representation. There are multiple databases identified
  * by integers from 0 (the default database) up to the max configured
- * database. The database number is the 'id' field in the structure. */
+ * database. The database number is the 'id' field in the structure. 
+ * 
+ * redis数据库的数据结构，一个redis共有16个库。     */
 typedef struct redisDb {
     dict *dict;                 /* The keyspace for this DB */
     dict *expires;              /* Timeout of keys with a timeout set */

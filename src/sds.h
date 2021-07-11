@@ -73,11 +73,15 @@ struct __attribute__ ((__packed__)) sdshdr64 {
     char buf[];
 };
 
+/* 以上数据结构中的flags字段的前三位含义，char类型是一个字节8位，前3位000就代表0，也就是SDS_TYPE_5，
+ * 依次类推，001代表SDS_TYPE_8 */
 #define SDS_TYPE_5  0
 #define SDS_TYPE_8  1
 #define SDS_TYPE_16 2
 #define SDS_TYPE_32 3
 #define SDS_TYPE_64 4
+
+
 #define SDS_TYPE_MASK 7
 #define SDS_TYPE_BITS 3
 #define SDS_HDR_VAR(T,s) struct sdshdr##T *sh = (void*)((s)-(sizeof(struct sdshdr##T)));
