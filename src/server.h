@@ -614,14 +614,22 @@ typedef struct RedisModuleDigest {
 
 #define OBJ_SHARED_REFCOUNT INT_MAX
 
-// redisObject数据类型：string hash list set sortedSet
+/* redisObject数据类型：string hash list set zset
+ * 总共占用的内存大小 4+4+24+32+64=128bit=16byte
+ * 一个cache line = 64byte
+ */
 typedef struct redisObject {
+    // 对象的类型
     unsigned type:4;
+    // 具体的数据结构OBJ_ENCODING， raw，int，embstr，zipList等等
     unsigned encoding:4;
+    // 24位，对象最后一次被命令程序访问的时候，与内存回收有关
     unsigned lru:LRU_BITS; /* LRU time (relative to global lru_clock) or
                             * LFU data (least significant 8 bits frequency
                             * and most significant 16 bits access time). */
+    // 引用计数，当refcount==0时，表示改对象已经不被任何对象引用，则可以进行垃圾回收
     int refcount;
+    // 该指针指向对象实际的数据结构 
     void *ptr;
 } robj;
 
