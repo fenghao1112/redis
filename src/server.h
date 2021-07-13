@@ -599,8 +599,8 @@ typedef struct RedisModuleDigest {
 #define OBJ_ENCODING_RAW 0     /* Raw representation */
 #define OBJ_ENCODING_INT 1     /* Encoded as integer */
 #define OBJ_ENCODING_HT 2      /* Encoded as hash table */
-#define OBJ_ENCODING_ZIPMAP 3  /* Encoded as zipmap */
-#define OBJ_ENCODING_LINKEDLIST 4 /* No longer used: old list encoding. */
+#define OBJ_ENCODING_ZIPMAP 3  /* 不再使用 Encoded as zipmap */
+#define OBJ_ENCODING_LINKEDLIST 4 /* 不再使用 No longer used: old list encoding. */
 #define OBJ_ENCODING_ZIPLIST 5 /* Encoded as ziplist */
 #define OBJ_ENCODING_INTSET 6  /* Encoded as intset */
 #define OBJ_ENCODING_SKIPLIST 7  /* Encoded as skiplist */
@@ -616,20 +616,21 @@ typedef struct RedisModuleDigest {
 
 /* redisObject数据类型：string hash list set zset
  * 总共占用的内存大小 4+4+24+32+64=128bit=16byte
- * 一个cache line = 64byte
+ * 一个cache line可以读取64byte
+ * sds结构最小3字节，再加上\0一个字节，所以数据64-16-3-1=44字节
  */
 typedef struct redisObject {
-    // 对象的类型
+    // 对象的类型，4bit
     unsigned type:4;
-    // 具体的数据结构OBJ_ENCODING， raw，int，embstr，zipList等等
+    // 具体的数据结构OBJ_ENCODING， raw，int，embstr，zipList等等，4bit
     unsigned encoding:4;
-    // 24位，对象最后一次被命令程序访问的时候，与内存回收有关
+    // 24bit，对象最后一次被命令程序访问的时间，与内存回收有关
     unsigned lru:LRU_BITS; /* LRU time (relative to global lru_clock) or
                             * LFU data (least significant 8 bits frequency
                             * and most significant 16 bits access time). */
-    // 引用计数，当refcount==0时，表示改对象已经不被任何对象引用，则可以进行垃圾回收
+    // 引用计数，当refcount==0时，表示改对象已经不被任何对象引用，则可以进行垃圾回收。4bytes
     int refcount;
-    // 该指针指向对象实际的数据结构 
+    // 该指针指向对象实际的数据结构 , 8bytes
     void *ptr;
 } robj;
 
