@@ -822,22 +822,49 @@ struct sharedObjectsStruct {
 };
 
 /* ZSETs use a specialized version of Skiplists */
+/*  跳表节点的数据结构 
+ *  跳跃表是Redis有序集合的底层实现方式之一
+ *  所以每个节点的ele存储有序集合的成员member值，score存储成员score值。
+ *  所有节点的分值是按从小到大的方式排序的，当有序集合的成员分值相同时，节点会按member的字典序进行排序。
+ */
 typedef struct zskiplistNode {
-    sds ele;
-    double score;
-    struct zskiplistNode *backward;
+    // 用于存储字符串类型的数据
+    sds ele; 
+    // 用于存储排序的分值
+    double score; 
+    // 后退指针，只能指向当前节点最底层的前一个节点，头节点和第一个节点——backward指向NULL，从后向前遍历跳跃表时使用。
+    struct zskiplistNode *backward; 
+    // 为柔性数组。每个节点的数组长度不一样，在生成跳跃表节点时，随机生成一个1～64的值，值越大出现的概率越低。
     struct zskiplistLevel {
+        // 指向本层下一个节点，尾节点的forward指向NULL
         struct zskiplistNode *forward;
+        // forward指向的节点与本节点之间的元素个数。span值越大，跳过的节点个数越多。
         unsigned long span;
     } level[];
 } zskiplistNode;
 
+/**
+ * 跳表结构
+ * 程序可以在O(1)的时间复杂度下，快速获取到跳跃表的头节点、尾节点、长度和高度。
+ */
 typedef struct zskiplist {
+    /**
+     * header指向跳跃表头节点。头节点是跳跃表的一个特殊节点，它的level数组元素个数为64。
+     * 头节点在有序集合中不存储任何member和score值，ele值为NULL, score值为0；
+     * 也不计入跳跃表的总长度。头节点在初始化时，64个元素的forward都指向NULL, span值都为0。
+     * 
+     * tail指向跳跃表尾节点
+     */
     struct zskiplistNode *header, *tail;
+    // 跳跃表长度，表示除头节点之外的节点总数
     unsigned long length;
+    // 跳跃表的高度
     int level;
 } zskiplist;
 
+/**
+ * zset 数据结构
+ */
 typedef struct zset {
     dict *dict;
     zskiplist *zsl;

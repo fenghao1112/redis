@@ -67,24 +67,33 @@ int zslLexValueGteMin(sds value, zlexrangespec *spec);
 int zslLexValueLteMax(sds value, zlexrangespec *spec);
 
 /* Create a skiplist node with the specified number of levels.
- * The SDS string 'ele' is referenced by the node after the call. */
+ * The SDS string 'ele' is referenced by the node after the call. 
+ * 创建跳表节点
+ * */
 zskiplistNode *zslCreateNode(int level, double score, sds ele) {
+    // 申请内存时需要指定柔性数组的大小，一个节点占用的内存大小为zskiplistNode的内存大小与level个zskiplistLevel的内存大小之和。
     zskiplistNode *zn =
         zmalloc(sizeof(*zn)+level*sizeof(struct zskiplistLevel));
+    // 变量初始化
     zn->score = score;
     zn->ele = ele;
     return zn;
 }
 
-/* Create a new skiplist. */
+/* Create a new skiplist.
+    创建一个跳跃表
+    初始化头节点数据
+ */
 zskiplist *zslCreate(void) {
     int j;
     zskiplist *zsl;
-
+    // 创建跳跃表
     zsl = zmalloc(sizeof(*zsl));
     zsl->level = 1;
     zsl->length = 0;
+    // 创建头节点
     zsl->header = zslCreateNode(ZSKIPLIST_MAXLEVEL,0,NULL);
+    // 初始头节点数据
     for (j = 0; j < ZSKIPLIST_MAXLEVEL; j++) {
         zsl->header->level[j].forward = NULL;
         zsl->header->level[j].span = 0;
@@ -118,7 +127,15 @@ void zslFree(zskiplist *zsl) {
 /* Returns a random level for the new skiplist node we are going to create.
  * The return value of this function is between 1 and ZSKIPLIST_MAXLEVEL
  * (both inclusive), with a powerlaw-alike distribution where higher
- * levels are less likely to be returned. */
+ * levels are less likely to be returned.
+ * 
+ * 随机生成1-64的值，作为一个新建节点的高度
+ * 值越大，概率越低，节点的高度确认之后便不会再更改
+ * 
+ * level的初始值为1，通过while循环，每次生成一个随机值，取这个值的低16位作为x，
+ * 当x小于0.25倍的0xFFFF时，level的值加1；
+ * 否则退出while循环。最终返回level和ZSKIPLIST_MAXLEVEL两者中的最小值。
+ *  */
 int zslRandomLevel(void) {
     int level = 1;
     while ((random()&0xFFFF) < (ZSKIPLIST_P * 0xFFFF))
@@ -128,9 +145,19 @@ int zslRandomLevel(void) {
 
 /* Insert a new node in the skiplist. Assumes the element does not already
  * exist (up to the caller to enforce that). The skiplist takes ownership
- * of the passed SDS string 'ele'. */
+ * of the passed SDS string 'ele'. 
+ * zadd 插入数据
+ * */
 zskiplistNode *zslInsert(zskiplist *zsl, double score, sds ele) {
+    /**
+     * update[] 插入节点时，需要更新被插入节点的每层的前一个节点
+     * 由于每层的前一个要更新的节点不一样，所以用update数组记录下来。
+     */
     zskiplistNode *update[ZSKIPLIST_MAXLEVEL], *x;
+    /*
+     * 记录当前层从header节点到update[i]节点所经历的步长，
+     * 在更新update[i]的span和设置新插入节点的span时用到。
+     */
     unsigned int rank[ZSKIPLIST_MAXLEVEL];
     int i, level;
 
@@ -1326,6 +1353,7 @@ int zsetAdd(robj *zobj, double score, sds ele, int *flags, double *newscore) {
     }
 
     /* Update the sorted set according to its encoding. */
+    // 底层数据结构是ziplist
     if (zobj->encoding == OBJ_ENCODING_ZIPLIST) {
         unsigned char *eptr;
 
@@ -1367,6 +1395,7 @@ int zsetAdd(robj *zobj, double score, sds ele, int *flags, double *newscore) {
             *flags |= ZADD_NOP;
             return 1;
         }
+        // 底层数据结构是skiplist
     } else if (zobj->encoding == OBJ_ENCODING_SKIPLIST) {
         zset *zs = zobj->ptr;
         zskiplistNode *znode;
@@ -1403,6 +1432,7 @@ int zsetAdd(robj *zobj, double score, sds ele, int *flags, double *newscore) {
             return 1;
         } else if (!xx) {
             ele = sdsdup(ele);
+            // 添加节点 zadd
             znode = zslInsert(zs->zsl,score,ele);
             serverAssert(dictAdd(zs->dict,ele,&znode->score) == DICT_OK);
             *flags |= ZADD_ADDED;
