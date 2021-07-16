@@ -247,7 +247,7 @@ robj *createHashObject(void) {
 }
 
 /**
- * 创建zset对象
+ * 创建zset跳表redisObject对象
  */
 robj *createZsetObject(void) {
     zset *zs = zmalloc(sizeof(*zs));

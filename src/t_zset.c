@@ -1632,8 +1632,10 @@ void zaddGenericCommand(client *c, int flags) {
         if (server.zset_max_ziplist_entries == 0 ||
             server.zset_max_ziplist_value < sdslen(c->argv[scoreidx+1]->ptr))
         {
+            // 创建zset跳表对象
             zobj = createZsetObject();
         } else {
+            // 创建zset压缩列表对象
             zobj = createZsetZiplistObject();
         }
         dbAdd(c->db,key,zobj);

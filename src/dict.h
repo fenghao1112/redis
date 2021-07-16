@@ -44,39 +44,52 @@
 /* Unused arguments generate annoying warnings... */
 #define DICT_NOTUSED(V) ((void) V)
 
+// hash表节点
 typedef struct dictEntry {
     void *key; /* key是sds数据结构 */
     union {
         void *val;  // 指向redisObject对象
         uint64_t u64;
-        int64_t s64;
+        int64_t s64; // 存储key的过期时间
         double d;
-    } v;
-    struct dictEntry *next;
+    } v; // 联合体，在不同场景下使用不同的字段
+    struct dictEntry *next; // hash冲突时，形成单链表，指向链表上的下一个元素
 } dictEntry;
 
+// 对该字典操作的函数指针
 typedef struct dictType {
+    // hash函数
     uint64_t (*hashFunction)(const void *key);
+    // 键复制函数
     void *(*keyDup)(void *privdata, const void *key);
+    // 值复制函数
     void *(*valDup)(void *privdata, const void *obj);
+    // 键比对函数
     int (*keyCompare)(void *privdata, const void *key1, const void *key2);
+    // 键销毁函数
     void (*keyDestructor)(void *privdata, void *key);
+    // 值销毁函数
     void (*valDestructor)(void *privdata, void *obj);
 } dictType;
 
 /* This is our hash table structure. Every dictionary has two of this as we
  * implement incremental rehashing, for the old to the new table. */
 typedef struct dictht {
-    dictEntry **table; // hashtable
+    dictEntry **table; // hashtable，指针数组，用来存储键值对
     unsigned long size; // 数组长度
-    unsigned long sizemask; // size-1
-    unsigned long used;
+    unsigned long sizemask; // 掩码=size-1，用来计算键的索引值
+    unsigned long used; // 数组中已存元素的个数，包含链表的数据
 } dictht;
 
+// 字典
 typedef struct dict {
-    dictType *type;
-    void *privdata;
-    dictht ht[2];  /* 数组大小为2，代表有两个字典表，是为了方便实现渐进式rehash */
+    dictType *type; // 该字典对应的特定函数操作
+    void *privdata; // 该字典依赖的数据
+    dictht ht[2];  /* hash表，键值对存储的位置。数组大小为2，代表有两个字典表，是为了方便实现渐进式rehash */
+    /*
+     * rehash标识。默认值为-1，代表未进行rehash操作。
+     * 值不为-1时，代表正在进行rehash操作。值代表ht[0]表的rehash操作进行到了哪个索引值
+     */
     long rehashidx; /* rehashing not in progress if rehashidx == -1 */
     unsigned long iterators; /* number of iterators currently running */
 } dict;
