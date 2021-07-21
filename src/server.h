@@ -660,12 +660,12 @@ typedef struct clientReplyBlock {
  * 
  * redis数据库的数据结构，一个redis共有16个库。     */
 typedef struct redisDb {
-    dict *dict;                 /* The keyspace for this DB */
-    dict *expires;              /* Timeout of keys with a timeout set */
+    dict *dict;                 /* 数据的键值对 The keyspace for this DB */
+    dict *expires;              /* 存储键的过期时间 Timeout of keys with a timeout set */
     dict *blocking_keys;        /* Keys with clients waiting for data (BLPOP)*/
     dict *ready_keys;           /* Blocked keys that received a PUSH */
     dict *watched_keys;         /* WATCHED keys for MULTI/EXEC CAS */
-    int id;                     /* Database ID */
+    int id;                     /* 数据库序号，Database ID */
     long long avg_ttl;          /* Average TTL, just for stats */
     list *defrag_later;         /* List of key names to attempt to defrag one by one, gradually. */
 } redisDb;
@@ -736,10 +736,14 @@ typedef struct readyList {
 /* With multiplexing we need to take per-client state.
  * Clients are taken in a linked list. */
 typedef struct client {
+    // 客户端唯一id 
     uint64_t id;            /* Client incremental unique ID. */
+    // 客户端socket的文件描述符 
     int fd;                 /* Client socket. */
+    // 客户端选择的数据库对象 
     redisDb *db;            /* Pointer to currently SELECTed DB. */
     robj *name;             /* As set by CLIENT SETNAME. */
+    // 输入缓冲区 
     sds querybuf;           /* Buffer we use to accumulate client queries. */
     size_t qb_pos;          /* The position we have read in querybuf. */
     sds pending_querybuf;   /* If this client is flagged as master, this buffer
@@ -747,14 +751,20 @@ typedef struct client {
                                replication stream that we are receiving from
                                the master. */
     size_t querybuf_peak;   /* Recent (100ms or more) peak of querybuf size. */
+    // 请求命令参数个数 
     int argc;               /* Num of arguments of current command. */
+    // 参数内容数组
     robj **argv;            /* Arguments of current command. */
+    // 待执行的命令对象 
     struct redisCommand *cmd, *lastcmd;  /* Last command executed. */
     int reqtype;            /* Request protocol type: PROTO_REQ_* */
     int multibulklen;       /* Number of multi bulk arguments left to read. */
     long bulklen;           /* Length of bulk argument in multi bulk request. */
+    // 存储待返回的数据 
     list *reply;            /* List of reply objects to send to the client. */
+    // 输出链表中占用空间总和
     unsigned long long reply_bytes; /* Tot bytes of objects in reply list. */
+    // 已返回给客户端的字节数
     size_t sentlen;         /* Amount of bytes already sent in the current
                                buffer or object being sent. */
     time_t ctime;           /* Client creation time. */
@@ -791,6 +801,7 @@ typedef struct client {
 
     /* Response buffer */
     int bufpos;
+    // 输出缓冲区
     char buf[PROTO_REPLY_CHUNK_BYTES];
 } client;
 
@@ -982,6 +993,7 @@ struct clusterState;
 struct redisServer {
     /* General */
     pid_t pid;                  /* Main process pid. */
+    // 配置文件绝对路径
     char *configfile;           /* Absolute config file path, or NULL */
     char *executable;           /* Absolute executable file path. */
     char **exec_argv;           /* Executable argv vector (copy). */
@@ -990,7 +1002,9 @@ struct redisServer {
                                    the actual 'hz' field value if dynamic-hz
                                    is enabled. */
     int hz;                     /* serverCron() calls frequency in hertz */
+    // 数据库数组
     redisDb *db;
+    // 命令字典：key为命令名称，value为struct redisCommand对象
     dict *commands;             /* Command table */
     dict *orig_commands;        /* Command table before command renaming. */
     aeEventLoop *el;
@@ -1016,17 +1030,21 @@ struct redisServer {
                                    client blocked on a module command needs
                                    to be processed. */
     /* Networking */
+    // tcp监听端口
     int port;                   /* TCP listening port */
     int tcp_backlog;            /* TCP listen() backlog */
+    // 绑定的本机所有的ip地址
     char *bindaddr[CONFIG_BINDADDR_MAX]; /* Addresses we should bind to */
     int bindaddr_count;         /* Number of addresses in server.bindaddr[] */
     char *unixsocket;           /* UNIX socket path */
     mode_t unixsocketperm;      /* UNIX socket permission */
+    // 针对所有的ip地址创建的文件描述符
     int ipfd[CONFIG_BINDADDR_MAX]; /* TCP socket file descriptors */
     int ipfd_count;             /* Used slots in ipfd[] */
     int sofd;                   /* Unix socket file descriptor */
     int cfd[CONFIG_BINDADDR_MAX];/* Cluster bus listening socket */
     int cfd_count;              /* Used slots in cfd[] */
+    // 所有连接的客户端
     list *clients;              /* List of active clients */
     list *clients_to_close;     /* Clients to close asynchronously */
     list *clients_pending_write; /* There is to write or install handler. */
@@ -1104,6 +1122,7 @@ struct redisServer {
     int active_defrag_cycle_max;       /* maximal effort for defrag in CPU percentage */
     unsigned long active_defrag_max_scan_fields; /* maximum number of fields of set/hash/zset/list to process from within the main dict scan */
     size_t client_max_querybuf_len; /* Limit for client query buffer length */
+    // 数据库数目
     int dbnum;                      /* Total number of configured DBs */
     int supervised;                 /* 1 if supervised, 0 otherwise. */
     int supervised_mode;            /* See SUPERVISED_* */
@@ -1352,9 +1371,13 @@ typedef struct pubsubPattern {
 typedef void redisCommandProc(client *c);
 typedef int *redisGetKeysProc(struct redisCommand *cmd, robj **argv, int argc, int *numkeys);
 struct redisCommand {
+    // 命令名称
     char *name;
+    // 命令处理函数
     redisCommandProc *proc;
+    // 命令参数数目，当arity小于0时，表示命令参数数目大于等于arity；当arity大于0时，表示命令参数数目必须为arity
     int arity;
+    // 命令标识
     char *sflags; /* Flags as string representation, one char per flag. */
     int flags;    /* The actual flags, obtained from the 'sflags' field. */
     /* Use a function to determine keys arguments in a command line.
