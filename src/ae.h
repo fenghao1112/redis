@@ -67,15 +67,21 @@ typedef int aeTimeProc(struct aeEventLoop *eventLoop, long long id, void *client
 typedef void aeEventFinalizerProc(struct aeEventLoop *eventLoop, void *clientData);
 typedef void aeBeforeSleepProc(struct aeEventLoop *eventLoop);
 
-/* File event structure */
+/* File event structure 
+    IO 事件结构体
+    客户端发送的网络请求
+*/
 typedef struct aeFileEvent {
-    int mask; /* one of AE_(READABLE|WRITABLE|BARRIER) */
-    aeFileProc *rfileProc;
-    aeFileProc *wfileProc;
-    void *clientData;
+    int mask; /* 事件类型 one of AE_(READABLE|WRITABLE|BARRIER) */
+    aeFileProc *rfileProc; /* 指向AE_READABLE的事件处理函数 */
+    aeFileProc *wfileProc; /* 指向AE_WRITABLE的事件处理函数 */
+    void *clientData; /* 指向客户端私有数据的指针 */
 } aeFileEvent;
 
-/* Time event structure */
+/* Time event structure
+    时间事件
+    redis自身的周期性操作    
+ */
 typedef struct aeTimeEvent {
     long long id; /* time event identifier. */
     long when_sec; /* seconds */
@@ -99,13 +105,13 @@ typedef struct aeEventLoop {
     int setsize; /* max number of file descriptors tracked */
     long long timeEventNextId;
     time_t lastTime;     /* Used to detect system clock skew */
-    aeFileEvent *events; /* Registered events */
-    aeFiredEvent *fired; /* Fired events */
-    aeTimeEvent *timeEventHead;
+    aeFileEvent *events; /* IO事件数组   Registered events */
+    aeFiredEvent *fired; /* 已出发事件数组  Fired events */
+    aeTimeEvent *timeEventHead;  // 记录时间事件的链表头
     int stop;
-    void *apidata; /* This is used for polling API specific data */
-    aeBeforeSleepProc *beforesleep;
-    aeBeforeSleepProc *aftersleep;
+    void *apidata; /* This is used for polling API specific data */ //和API调用接口相关的数据
+    aeBeforeSleepProc *beforesleep; //进入事件循环流程前执行的函数
+    aeBeforeSleepProc *aftersleep; //退出事件循环流程后执行的函数
 } aeEventLoop;
 
 /* Prototypes */
