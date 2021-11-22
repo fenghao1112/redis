@@ -2065,6 +2065,7 @@ void initServer(void) {
 
     createSharedObjects();
     adjustOpenFilesLimit();
+    // 初始化事件循环结构
     server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);
     if (server.el == NULL) {
         serverLog(LL_WARNING,
@@ -2075,6 +2076,7 @@ void initServer(void) {
     server.db = zmalloc(sizeof(redisDb)*server.dbnum);
 
     /* Open the TCP listening socket for the user commands. */
+    // 创建服务器监听fd
     if (server.port != 0 &&
         listenToPort(server.port,server.ipfd,&server.ipfd_count) == C_ERR)
         exit(1);
@@ -2154,7 +2156,7 @@ void initServer(void) {
 
     /* Create an event handler for accepting new connections in TCP and Unix
      * domain sockets. */
-    // 注册要监听的网络io事件
+    // 注册要监听的网络io事件，也就是监听socket的连接事件
     for (j = 0; j < server.ipfd_count; j++) {
         if (aeCreateFileEvent(server.el, server.ipfd[j], AE_READABLE,
             acceptTcpHandler,NULL) == AE_ERR)
@@ -3904,12 +3906,14 @@ void createPidFile(void) {
 void daemonize(void) {
     int fd;
 
-    if (fork() != 0) exit(0); /* parent exits */
+    // fork成功执行或失败，则父进程退出
+    if (fork() != 0) exit(0); /* parent exits */ 
     setsid(); /* create a new session */
 
     /* Every output goes to /dev/null. If Redis is daemonized but
      * the 'logfile' is set to 'stdout' in the configuration file
      * it will not log at all. */
+    // 把守护进程的标准输入、标准输出和标准错误输出，重新定向到 /dev/null 设备。因为守护进程是在后台运行，它的输入输出就不再依赖于shell终端
     if ((fd = open("/dev/null", O_RDWR, 0)) != -1) {
         dup2(fd, STDIN_FILENO);
         dup2(fd, STDOUT_FILENO);
@@ -4372,9 +4376,12 @@ int main(int argc, char **argv) {
     }
 
     server.supervised = redisIsSupervised(server.supervised_mode);
+    //如果配置参数daemonize为1，supervised值为0，那么设置background值为1，否则，设置其为0。
     int background = server.daemonize && !server.supervised;
+    // 以守护进程的方式运行redis
     if (background) daemonize();
 
+    // 初始化事件驱动结构体
     initServer();
     if (background || server.pidfile) createPidFile();
     redisSetProcTitle(argv[0]);
@@ -4419,6 +4426,7 @@ int main(int argc, char **argv) {
         if (server.sofd > 0)
             serverLog(LL_NOTICE,"The server is now ready to accept connections at %s", server.unixsocket);
     } else {
+        // 把部分任务交给子线程处理。能达到异步的效果。
         InitServerLast();
         sentinelIsRunning();
     }
@@ -4430,6 +4438,7 @@ int main(int argc, char **argv) {
 
     aeSetBeforeSleepProc(server.el,beforeSleep);
     aeSetAfterSleepProc(server.el,afterSleep);
+    // 针对事件捕获、分发和处理的整个主循环
     aeMain(server.el);
     aeDeleteEventLoop(server.el);
     return 0;
