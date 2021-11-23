@@ -109,7 +109,7 @@ typedef struct aeEventLoop {
     aeFiredEvent *fired; /* 已出发事件数组  Fired events */
     aeTimeEvent *timeEventHead;  // 记录时间事件的链表头
     int stop;
-    void *apidata; /* This is used for polling API specific data */ //和API调用接口相关的数据
+    void *apidata; /* This is used for polling API specific data */ //和API调用接口相关的数据，比如epoll实例和epoll_events数组
     aeBeforeSleepProc *beforesleep; //进入事件循环流程前执行的函数
     aeBeforeSleepProc *aftersleep; //退出事件循环流程后执行的函数
 } aeEventLoop;

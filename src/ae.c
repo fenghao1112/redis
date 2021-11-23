@@ -142,14 +142,18 @@ int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
         errno = ERANGE;
         return AE_ERR;
     }
+    // fd代表事件数组的下标
     aeFileEvent *fe = &eventLoop->events[fd];
-
+    // 添加事件到epoll中
     if (aeApiAddEvent(eventLoop, fd, mask) == -1)
         return AE_ERR;
     fe->mask |= mask;
+    // 如果是可读事件，就把回调函数绑定到rfileProc
     if (mask & AE_READABLE) fe->rfileProc = proc;
+    // 如果是可写事件，就把回调函数绑定到rfileProc
     if (mask & AE_WRITABLE) fe->wfileProc = proc;
     fe->clientData = clientData;
+    // 设置最大的文件描述符
     if (fd > eventLoop->maxfd)
         eventLoop->maxfd = fd;
     return AE_OK;
@@ -412,7 +416,7 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
 
         /* Call the multiplexing API, will return only on timeout or when
          * some event fires. */
-        // 函数捕获事件
+        // 函数捕获事件，调用epoll_wait函数返回要处理的事件
         numevents = aeApiPoll(eventLoop, tvp);
 
         /* After sleep callback. */

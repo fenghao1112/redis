@@ -46,12 +46,14 @@ static int aeApiCreate(aeEventLoop *eventLoop) {
         zfree(state);
         return -1;
     }
+    // 创建epoll实例
     state->epfd = epoll_create(1024); /* 1024 is just a hint for the kernel */
     if (state->epfd == -1) {
         zfree(state->events);
         zfree(state);
         return -1;
     }
+    // 把 state 变量赋值给 eventLoop 中的 apidata。eventLoop 结构体中就有了 epoll 实例和 epoll_event 数组的信息
     eventLoop->apidata = state;
     return 0;
 }
@@ -71,17 +73,21 @@ static void aeApiFree(aeEventLoop *eventLoop) {
     zfree(state);
 }
 
-// 添加事件
+// 添加事件到epoll，调用epoll_ctl
 static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
+    // apidata保存了epoll实例
     aeApiState *state = eventLoop->apidata;
+    // 创建epoll_event类型变量
     struct epoll_event ee = {0}; /* avoid valgrind warning */
     /* If the fd was already monitored for some event, we need a MOD
      * operation. Otherwise we need an ADD operation. */
+    // 如果文件描述符fd对应的IO事件已存在，则操作类型为修改，否则为添加
     int op = eventLoop->events[fd].mask == AE_NONE ?
             EPOLL_CTL_ADD : EPOLL_CTL_MOD;
 
     ee.events = 0;
     mask |= eventLoop->events[fd].mask; /* Merge old events */
+    // 将可读或可写IO事件类型转换为epoll监听的类型EPOLLIN或EPOLLOUT
     if (mask & AE_READABLE) ee.events |= EPOLLIN;
     if (mask & AE_WRITABLE) ee.events |= EPOLLOUT;
     ee.data.fd = fd;

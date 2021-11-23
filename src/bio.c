@@ -61,8 +61,11 @@
 #include "server.h"
 #include "bio.h"
 
+//保存线程描述符的数组
 static pthread_t bio_threads[BIO_NUM_OPS];
+//保存互斥锁的数组
 static pthread_mutex_t bio_mutex[BIO_NUM_OPS];
+//保存条件变量的两个数组
 static pthread_cond_t bio_newjob_cond[BIO_NUM_OPS];
 static pthread_cond_t bio_step_cond[BIO_NUM_OPS];
 static list *bio_jobs[BIO_NUM_OPS];
@@ -76,10 +79,13 @@ static unsigned long long bio_pending[BIO_NUM_OPS];
 
 /* This structure represents a background Job. It is only used locally to this
  * file as the API does not expose the internals at all. */
+// 表示后台任务的结构体
 struct bio_job {
+    // 任务创建时间
     time_t time; /* Time at which the job was created. */
     /* Job specific arguments pointers. If we need to pass more than three
      * arguments we can just pass a pointer to a structure or alike. */
+    // 任务参数
     void *arg1, *arg2, *arg3;
 };
 
@@ -93,6 +99,7 @@ void lazyfreeFreeSlotsMapFromBioThread(zskiplist *sl);
 #define REDIS_THREAD_STACK_SIZE (1024*1024*4)
 
 /* Initialize the background system, spawning the thread. */
+// 初始化三种后台任务，分别是关闭文件，aop日志重写，懒删除内存。每种任务创建一个线程去处理。
 void bioInit(void) {
     pthread_attr_t attr;
     pthread_t thread;
@@ -100,11 +107,15 @@ void bioInit(void) {
     int j;
 
     /* Initialization of state vars and objects */
+    // 默认是3种后台任务
     for (j = 0; j < BIO_NUM_OPS; j++) {
+        // 为每种后台任务创建互斥锁和条件变量
         pthread_mutex_init(&bio_mutex[j],NULL);
         pthread_cond_init(&bio_newjob_cond[j],NULL);
         pthread_cond_init(&bio_step_cond[j],NULL);
+        // 为每个后台任务创建一个待处理的任务列表
         bio_jobs[j] = listCreate();
+        // 每种后台任务中待处理任务的个数
         bio_pending[j] = 0;
     }
 
@@ -118,6 +129,7 @@ void bioInit(void) {
     /* Ready to spawn our threads. We use the single argument the thread
      * function accepts in order to pass the job ID the thread is
      * responsible of. */
+    // 为每种后台任务创建一个线程，三个线程执行的函数都是bioProcessBackgroundJobs
     for (j = 0; j < BIO_NUM_OPS; j++) {
         void *arg = (void*)(unsigned long) j;
         if (pthread_create(&thread,&attr,bioProcessBackgroundJobs,arg) != 0) {
@@ -128,7 +140,9 @@ void bioInit(void) {
     }
 }
 
+// 创建后台任务
 void bioCreateBackgroundJob(int type, void *arg1, void *arg2, void *arg3) {
+    //创建新的任务
     struct bio_job *job = zmalloc(sizeof(*job));
 
     job->time = time(NULL);
@@ -136,12 +150,14 @@ void bioCreateBackgroundJob(int type, void *arg1, void *arg2, void *arg3) {
     job->arg2 = arg2;
     job->arg3 = arg3;
     pthread_mutex_lock(&bio_mutex[type]);
-    listAddNodeTail(bio_jobs[type],job);
+    //将任务加到bio_jobs数组的对应任务列表中
+    listAddNodeTail(bio_jobs[type],job); 
+    //将对应任务列表上等待处理的任务个数加1
     bio_pending[type]++;
     pthread_cond_signal(&bio_newjob_cond[type]);
     pthread_mutex_unlock(&bio_mutex[type]);
 }
-
+// 处理后台任务，参数是三种后台任务的种类
 void *bioProcessBackgroundJobs(void *arg) {
     struct bio_job *job;
     unsigned long type = (unsigned long) arg;
@@ -177,6 +193,7 @@ void *bioProcessBackgroundJobs(void *arg) {
             continue;
         }
         /* Pop the job from the queue. */
+        //从类型为type的任务队列中获取第一个任务
         ln = listFirst(bio_jobs[type]);
         job = ln->value;
         /* It is now possible to unlock the background system as we know have
@@ -184,15 +201,17 @@ void *bioProcessBackgroundJobs(void *arg) {
         pthread_mutex_unlock(&bio_mutex[type]);
 
         /* Process the job accordingly to its type. */
+        //判断当前处理的后台任务类型是哪一种
         if (type == BIO_CLOSE_FILE) {
-            close((long)job->arg1);
+            close((long)job->arg1); //如果是关闭文件任务，那就调用close函数
         } else if (type == BIO_AOF_FSYNC) {
-            redis_fsync((long)job->arg1);
+            redis_fsync((long)job->arg1); //如果是AOF同步写任务，那就调用redis_fsync函数
         } else if (type == BIO_LAZY_FREE) {
             /* What we free changes depending on what arguments are set:
              * arg1 -> free the object at pointer.
              * arg2 & arg3 -> free two dictionaries (a Redis DB).
              * only arg3 -> free the skiplist. */
+            //如果是惰性删除任务，那根据任务的参数分别调用不同的惰性删除函数执行
             if (job->arg1)
                 lazyfreeFreeObjectFromBioThread(job->arg1);
             else if (job->arg2 && job->arg3)
@@ -207,7 +226,9 @@ void *bioProcessBackgroundJobs(void *arg) {
         /* Lock again before reiterating the loop, if there are no longer
          * jobs to process we'll block again in pthread_cond_wait(). */
         pthread_mutex_lock(&bio_mutex[type]);
+        //任务执行完成后，调用listDelNode在任务队列中删除该任务
         listDelNode(bio_jobs[type],ln);
+        //将对应的等待任务个数减一。
         bio_pending[type]--;
 
         /* Unblock threads blocked on bioWaitStepOfType() if any. */
