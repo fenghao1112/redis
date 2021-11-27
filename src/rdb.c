@@ -1012,12 +1012,14 @@ int rdbSaveKeyValuePair(rio *rdb, robj *key, robj *val, long long expiretime) {
     int savelfu = server.maxmemory_policy & MAXMEMORY_FLAG_LFU;
 
     /* Save the expire time */
+    //写入过期时间操作码标识
     if (expiretime != -1) {
         if (rdbSaveType(rdb,RDB_OPCODE_EXPIRETIME_MS) == -1) return -1;
         if (rdbSaveMillisecondTime(rdb,expiretime) == -1) return -1;
     }
 
     /* Save the LRU info. */
+    //写入LRU空闲时间操作码标识
     if (savelru) {
         uint64_t idletime = estimateObjectIdleTime(val);
         idletime /= 1000; /* Using seconds is enough and requires less space.*/
@@ -1026,6 +1028,7 @@ int rdbSaveKeyValuePair(rio *rdb, robj *key, robj *val, long long expiretime) {
     }
 
     /* Save the LFU info. */
+    //写入LFU访问频率操作码标识
     if (savelfu) {
         uint8_t buf[1];
         buf[0] = LFUDecrAndReturn(val);
@@ -1038,19 +1041,22 @@ int rdbSaveKeyValuePair(rio *rdb, robj *key, robj *val, long long expiretime) {
     }
 
     /* Save type, key, value */
-    if (rdbSaveObjectType(rdb,val) == -1) return -1;
-    if (rdbSaveStringObject(rdb,key) == -1) return -1;
-    if (rdbSaveObject(rdb,val,key) == -1) return -1;
+    if (rdbSaveObjectType(rdb,val) == -1) return -1; //写入键值对的类型标识
+    if (rdbSaveStringObject(rdb,key) == -1) return -1; //写入键值对的key
+    if (rdbSaveObject(rdb,val,key) == -1) return -1; //写入键值对的value
     return 1;
 }
 
 /* Save an AUX field. */
 ssize_t rdbSaveAuxField(rio *rdb, void *key, size_t keylen, void *val, size_t vallen) {
     ssize_t ret, len = 0;
+    //写入操作码
     if ((ret = rdbSaveType(rdb,RDB_OPCODE_AUX)) == -1) return -1;
     len += ret;
+    //写入属性信息中的键
     if ((ret = rdbSaveRawString(rdb,key,keylen)) == -1) return -1;
     len += ret;
+    //写入属性信息中的值
     if ((ret = rdbSaveRawString(rdb,val,vallen)) == -1) return -1;
     len += ret;
     return len;
@@ -1075,12 +1081,17 @@ int rdbSaveInfoAuxFields(rio *rdb, int flags, rdbSaveInfo *rsi) {
     int aof_preamble = (flags & RDB_SAVE_AOF_PREAMBLE) != 0;
 
     /* Add a few fields about the state when the RDB was created. */
+    // redis版本信息
     if (rdbSaveAuxFieldStrStr(rdb,"redis-ver",REDIS_VERSION) == -1) return -1;
+    // redis运行平台的架构信息，32位或64位
     if (rdbSaveAuxFieldStrInt(rdb,"redis-bits",redis_bits) == -1) return -1;
+    // redis文件的创建时间
     if (rdbSaveAuxFieldStrInt(rdb,"ctime",time(NULL)) == -1) return -1;
+    // redis已使用的内存量
     if (rdbSaveAuxFieldStrInt(rdb,"used-mem",zmalloc_used_memory()) == -1) return -1;
 
     /* Handle saving options that generate aux fields. */
+    // 保存从库信息
     if (rsi) {
         if (rdbSaveAuxFieldStrInt(rdb,"repl-stream-db",rsi->repl_stream_db)
             == -1) return -1;
@@ -1152,11 +1163,17 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
 
     if (server.rdb_checksum)
         rdb->update_cksum = rioGenericUpdateChecksum;
-    snprintf(magic,sizeof(magic),"REDIS%04d",RDB_VERSION);
-    if (rdbWriteRaw(rdb,magic,9) == -1) goto werr;
+    // 生成魔术magic
+    snprintf(magic,sizeof(magic),"REDIS%04d",RDB_VERSION); 
+    // 将magic写入rdb文件
+    if (rdbWriteRaw(rdb,magic,9) == -1) goto werr; 
+    // 将属性信息写入rdb文件
     if (rdbSaveInfoAuxFields(rdb,flags,rsi) == -1) goto werr;
+    // 将扩展数据写入rdb文件
     if (rdbSaveModulesAux(rdb, REDISMODULE_AUX_BEFORE_RDB) == -1) goto werr;
 
+    // 实际数据落地到rdb文件
+    // 变量所有库
     for (j = 0; j < server.dbnum; j++) {
         redisDb *db = server.db+j;
         dict *d = db->dict;
@@ -1164,7 +1181,9 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
         di = dictGetSafeIterator(d);
 
         /* Write the SELECT DB opcode */
+        // 写入SELECTDB操作码
         if (rdbSaveType(rdb,RDB_OPCODE_SELECTDB) == -1) goto werr;
+        // 写入当前数据表编号
         if (rdbSaveLen(rdb,j) == -1) goto werr;
 
         /* Write the RESIZE DB opcode. We trim the size to UINT32_MAX, which
@@ -1172,21 +1191,26 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
          * However this does not limit the actual size of the DB to load since
          * these sizes are just hints to resize the hash tables. */
         uint64_t db_size, expires_size;
+        // 获取全局哈希表的大小
         db_size = dictSize(db->dict);
+        // 获取过期key哈希表的大小
         expires_size = dictSize(db->expires);
+        // 写入RESIZEDB操作码
         if (rdbSaveType(rdb,RDB_OPCODE_RESIZEDB) == -1) goto werr;
+         // 写入全局哈希表的大小
         if (rdbSaveLen(rdb,db_size) == -1) goto werr;
+         // 写入过期key哈希表的大小
         if (rdbSaveLen(rdb,expires_size) == -1) goto werr;
 
         /* Iterate this DB writing every entry */
-        while((de = dictNext(di)) != NULL) {
-            sds keystr = dictGetKey(de);
-            robj key, *o = dictGetVal(de);
+        while((de = dictNext(di)) != NULL) { // 读取数据库每一个键值对
+            sds keystr = dictGetKey(de); // 获取键值对的key
+            robj key, *o = dictGetVal(de); // 获取键值对的value
             long long expire;
 
-            initStaticStringObject(key,keystr);
-            expire = getExpire(db,&key);
-            if (rdbSaveKeyValuePair(rdb,&key,o,expire) == -1) goto werr;
+            initStaticStringObject(key,keystr); // 为key生成string对象
+            expire = getExpire(db,&key); // 获取键值对的过期时间
+            if (rdbSaveKeyValuePair(rdb,&key,o,expire) == -1) goto werr; // 将key和value写入rdb文件
 
             /* When this RDB is produced as part of an AOF rewrite, move
              * accumulated diff from parent to child while rewriting in
@@ -1262,6 +1286,7 @@ werr: /* Write error. */
 }
 
 /* Save the DB on disk. Return C_ERR on error, C_OK on success. */
+// save 命令执行生成rdb文件
 int rdbSave(char *filename, rdbSaveInfo *rsi) {
     char tmpfile[256];
     char cwd[MAXPATHLEN]; /* Current working dir path for error messages. */
@@ -1325,6 +1350,7 @@ werr:
     return C_ERR;
 }
 
+// bgsave 命令执行生成rdb文件
 int rdbSaveBackground(char *filename, rdbSaveInfo *rsi) {
     pid_t childpid;
     long long start;
@@ -2295,6 +2321,7 @@ void backgroundSaveDoneHandler(int exitcode, int bysignal) {
 
 /* Spawn an RDB child that writes the RDB to the sockets of the slaves
  * that are currently in SLAVE_STATE_WAIT_BGSAVE_START state. */
+// 在主从复制时调用调用。生成rdb文件,然后通过网络以字节流的形式，直接发送 RDB 文件的二进制数据给从节点
 int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
     int *fds;
     uint64_t *clientids;
