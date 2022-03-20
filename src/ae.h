@@ -106,7 +106,7 @@ typedef struct aeEventLoop {
     long long timeEventNextId;
     time_t lastTime;     /* Used to detect system clock skew */
     aeFileEvent *events; /* IO事件数组   Registered events */
-    aeFiredEvent *fired; /* 已出发事件数组  Fired events */
+    aeFiredEvent *fired; /* 已触发事件数组  Fired events */
     aeTimeEvent *timeEventHead;  // 记录时间事件的链表头
     int stop;
     void *apidata; /* This is used for polling API specific data */ //和API调用接口相关的数据，比如epoll实例和epoll_events数组

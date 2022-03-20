@@ -1626,13 +1626,14 @@ int rewriteAppendOnlyFileBackground(void) {
     return C_OK; /* unreached */
 }
 
+// 手动执行bgrewriteaof命令执行aof重写
 void bgrewriteaofCommand(client *c) {
-    if (server.aof_child_pid != -1) {
+    if (server.aof_child_pid != -1) { //有AOF重写子进程，因此不执行重写
         addReplyError(c,"Background append only file rewriting already in progress");
-    } else if (server.rdb_child_pid != -1) {
+    } else if (server.rdb_child_pid != -1) { //有RDB子进程，将AOF重写设置为待调度运行
         server.aof_rewrite_scheduled = 1;
         addReplyStatus(c,"Background append only file rewriting scheduled");
-    } else if (rewriteAppendOnlyFileBackground() == C_OK) {
+    } else if (rewriteAppendOnlyFileBackground() == C_OK) { //实际执行AOF重写
         addReplyStatus(c,"Background append only file rewriting started");
     } else {
         addReply(c,shared.err);
