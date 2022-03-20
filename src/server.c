@@ -2100,11 +2100,17 @@ void initServer(void) {
     }
 
     /* Create the Redis databases, and initialize other internal state. */
+    // 会为每个数据库执行初始化操作
     for (j = 0; j < server.dbnum; j++) {
+        //创建全局哈希表
         server.db[j].dict = dictCreate(&dbDictType,NULL);
+        //创建过期key的信息表
         server.db[j].expires = dictCreate(&keyptrDictType,NULL);
+        //为被BLPOP阻塞的key创建信息表
         server.db[j].blocking_keys = dictCreate(&keylistDictType,NULL);
+        //为将执行PUSH的阻塞key创建信息表
         server.db[j].ready_keys = dictCreate(&objectKeyPointerValueDictType,NULL);
+        //为被MULTI/WATCH操作监听的key创建信息表
         server.db[j].watched_keys = dictCreate(&keylistDictType,NULL);
         server.db[j].id = j;
         server.db[j].avg_ttl = 0;
@@ -2149,6 +2155,7 @@ void initServer(void) {
     /* Create the timer callback, this is our way to process many background
      * operations incrementally, like clients timeout, eviction of unaccessed
      * expired keys and so forth. */
+    // 为server后台任务创建定时事件
     if (aeCreateTimeEvent(server.el, 1, serverCron, NULL, NULL) == AE_ERR) {
         serverPanic("Can't create event loop timers.");
         exit(1);
@@ -4233,6 +4240,7 @@ int main(int argc, char **argv) {
     int j;
 
 #ifdef REDIS_TEST
+//如果启动参数有test和ziplist，那么就调用ziplistTest函数进行ziplist的测试
     if (argc == 3 && !strcasecmp(argv[1], "test")) {
         if (!strcasecmp(argv[2], "ziplist")) {
             return ziplistTest(argc, argv);
@@ -4259,19 +4267,23 @@ int main(int argc, char **argv) {
 #endif
 
     /* We need to initialize our libraries, and the server configuration. */
+    // 初始化库
 #ifdef INIT_SETPROCTITLE_REPLACEMENT
     spt_init(argc, argv);
 #endif
+    // 设置 server 运行的时区
     setlocale(LC_COLLATE,"");
     tzset(); /* Populates 'timezone' global. */
     zmalloc_set_oom_handler(redisOutOfMemoryHandler);
     srand(time(NULL)^getpid());
     gettimeofday(&tv,NULL);
 
+    // 设置哈希函数的随机种子
     char hashseed[16];
     getRandomHexChars(hashseed,sizeof(hashseed));
     dictSetHashFunctionSeed((uint8_t*)hashseed);
     server.sentinel_mode = checkForSentinelMode(argc,argv);
+    // 初始化redis服务器默认参数配置
     initServerConfig();
     moduleInitModulesSystem();
 
@@ -4285,25 +4297,30 @@ int main(int argc, char **argv) {
     /* We need to init sentinel right now as parsing the configuration file
      * in sentinel mode will have the effect of populating the sentinel
      * data structures with master nodes to monitor. */
+    // 判断server是否设置为哨兵模式
     if (server.sentinel_mode) {
-        initSentinelConfig();
-        initSentinel();
+        initSentinelConfig(); //初始化哨兵的配置
+        initSentinel(); //初始化哨兵模式
     }
 
     /* Check if we need to start in redis-check-rdb/aof mode. We just execute
      * the program main. However the program is part of the Redis executable
      * so that we can easily execute an RDB check on loading errors. */
+    //如果运行的是redis-check-rdb程序，调用redis_check_rdb_main函数检测RDB文件
     if (strstr(argv[0],"redis-check-rdb") != NULL)
         redis_check_rdb_main(argc,argv,NULL);
+    //如果运行的是redis-check-aof程序，调用redis_check_aof_main函数检测AOF文件
     else if (strstr(argv[0],"redis-check-aof") != NULL)
         redis_check_aof_main(argc,argv);
 
+    // 检查用户是否指定了配置文件，或者配置选项
     if (argc >= 2) {
         j = 1; /* First option to parse in argv[] */
         sds options = sdsempty();
         char *configfile = NULL;
 
         /* Handle special options --help and --version */
+        // 处理特殊选项 -h 、-v 和 --test-memory
         if (strcmp(argv[1], "-v") == 0 ||
             strcmp(argv[1], "--version") == 0) version();
         if (strcmp(argv[1], "--help") == 0 ||
@@ -4320,6 +4337,8 @@ int main(int argc, char **argv) {
         }
 
         /* First argument is the config file name? */
+        // 如果第一个参数（argv[1]）不是以 "--" 开头
+        // 那么它应该是一个配置文件
         if (argv[j][0] != '-' || argv[j][1] != '-') {
             configfile = argv[j];
             server.configfile = getAbsolutePath(configfile);
@@ -4334,6 +4353,8 @@ int main(int argc, char **argv) {
          * configuration file. For instance --port 6380 will generate the
          * string "port 6380\n" to be parsed after the actual file name
          * is parsed, if any. */
+        // 对用户给定的其余选项进行分析，并将分析所得的字符串追加稍后载入的配置文件的内容之后
+        // 比如 --port 6380 会被分析为 "port 6380\n"
         while(j != argc) {
             if (argv[j][0] == '-' && argv[j][1] == '-') {
                 /* Option name */
@@ -4360,6 +4381,8 @@ int main(int argc, char **argv) {
             exit(1);
         }
         resetServerSaveParams();
+
+        // 对命令行参数和配置文件中的参数进行合并处理
         loadServerConfig(configfile,options);
         sdsfree(options);
     }
@@ -4386,13 +4409,14 @@ int main(int argc, char **argv) {
     if (background) daemonize();
 
     // 初始化事件驱动结构体
+    // 对 server 运行时的各种资源进行初始化工作。这主要包括了 server 资源管理所需的数据结构初始化、键值对数据库初始化、server 网络框架初始化等
     initServer();
     if (background || server.pidfile) createPidFile();
     redisSetProcTitle(argv[0]);
     redisAsciiArt();
     checkTcpBacklogSettings();
 
-    if (!server.sentinel_mode) {
+    if (!server.sentinel_mode) { // 非哨兵模式启动
         /* Things not needed when running in Sentinel mode. */
         serverLog(LL_WARNING,"Server initialized");
     #ifdef __linux__
@@ -4415,7 +4439,9 @@ int main(int argc, char **argv) {
     #endif /* __arm64__ */
     #endif /* __linux__ */
         moduleLoadFromQueue();
+        // 初始化三种后台任务，分别是关闭文件，aop日志重写，懒删除内存。每种任务创建一个线程去处理。
         InitServerLast();
+        // 从磁盘上加载 AOF 或者是 RDB 文件，以便恢复之前的数据
         loadDataFromDisk();
         if (server.cluster_enabled) {
             if (verifyClusterConfigWithData() == C_ERR) {
@@ -4432,6 +4458,7 @@ int main(int argc, char **argv) {
     } else {
         // 把部分任务交给子线程处理。能达到异步的效果。
         InitServerLast();
+        // 设置启动哨兵模式
         sentinelIsRunning();
     }
 
@@ -4443,7 +4470,7 @@ int main(int argc, char **argv) {
     // 运行事件处理器，一直到服务器关闭为止
     aeSetBeforeSleepProc(server.el,beforeSleep);
     aeSetAfterSleepProc(server.el,afterSleep);
-    // 针对事件捕获、分发和处理的整个主循环
+    // 针对事件捕获、分发和处理的整个主循环，进入事件驱动框架，开始循环处理各种触发的事件
     aeMain(server.el);
     aeDeleteEventLoop(server.el);
     return 0;
