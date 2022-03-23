@@ -47,10 +47,12 @@ robj *createObject(int type, void *ptr) {
 
     /* Set the LRU to the current lruclock (minutes resolution), or
      * alternatively the LFU counter. */
+    // 使用LFU算法时，lru变量包括以分钟为精度的UNIX时间戳和访问次数5
     if (server.maxmemory_policy & MAXMEMORY_FLAG_LFU) {
+        // 前16bits代表上一次访问的时间戳（以1分钟为精度的UNIX时间戳），后8bits代表访问次数（最大为255）
         o->lru = (LFUGetTimeInMinutes()<<8) | LFU_INIT_VAL;
     } else {
-        o->lru = LRU_CLOCK();
+        o->lru = LRU_CLOCK(); //使用LRU算法时的设置
     }
     return o;
 }
