@@ -44,8 +44,12 @@ int keyIsExpired(redisDb *db, robj *key);
  * Firstly, decrement the counter if the decrement time is reached.
  * Then logarithmically increment the counter, and update the access time. */
 void updateLFU(robj *val) {
+    // 根据距离上次访问的时长，衰减访问次数，获取新的衰减后的访问次数
     unsigned long counter = LFUDecrAndReturn(val);
+    // 根据当前访问更新访问次数。
+    // 访问次数越多的键值对，它的访问次数再增加的难度就会越大
     counter = LFULogIncr(counter);
+    // 更新 lru 变量值。
     val->lru = (LFUGetTimeInMinutes()<<8) | counter;
 }
 
@@ -65,9 +69,9 @@ robj *lookupKey(redisDb *db, robj *key, int flags) {
             !(flags & LOOKUP_NOTOUCH))
         {
             if (server.maxmemory_policy & MAXMEMORY_FLAG_LFU) {
-                updateLFU(val);
+                updateLFU(val); //使用LFU算法时，调用updateLFU函数更新访问频率
             } else {
-                val->lru = LRU_CLOCK();
+                val->lru = LRU_CLOCK(); //使用LRU算法时，调用LRU_CLOCK
             }
         }
         return val;
