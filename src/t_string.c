@@ -76,20 +76,21 @@ void setGenericCommand(client *c, int flags, robj *key, robj *val, robj *expire,
         }
         if (unit == UNIT_SECONDS) milliseconds *= 1000;
     }
-
+    // 如果有NX选项，那么查找key是否已经存在。或者是有XX选项，并且key不存在。就直接返回
     if ((flags & OBJ_SET_NX && lookupKeyWrite(c->db,key) != NULL) ||
         (flags & OBJ_SET_XX && lookupKeyWrite(c->db,key) == NULL))
     {
-        addReply(c, abort_reply ? abort_reply : shared.nullbulk);
+        addReply(c, abort_reply ? abort_reply : shared.nullbulk); //如果已经存在，则返回空值
         return;
     }
+    // 键值对的实际插入
     setKey(c->db,key,val);
     server.dirty++;
-    if (expire) setExpire(c,c->db,key,mstime()+milliseconds);
+    if (expire) setExpire(c,c->db,key,mstime()+milliseconds); // 设置过期时间
     notifyKeyspaceEvent(NOTIFY_STRING,"set",key,c->db->id);
     if (expire) notifyKeyspaceEvent(NOTIFY_GENERIC,
         "expire",key,c->db->id);
-    addReply(c, ok_reply ? ok_reply : shared.ok);
+    addReply(c, ok_reply ? ok_reply : shared.ok); // 返回结果给客户端
 }
 
 /* SET key value [NX] [XX] [EX <seconds>] [PX <milliseconds>] */
