@@ -78,14 +78,18 @@ size_t lazyfreeGetFreeEffort(robj *obj) {
 int dbAsyncDelete(redisDb *db, robj *key) {
     /* Deleting an entry from the expires dict will not free the sds of
      * the key, because it is shared with the main dictionary. */
+    // 在过期 key 的哈希表中同步删除被淘汰的键值对
     if (dictSize(db->expires) > 0) dictDelete(db->expires,key->ptr);
 
     /* If the value is composed of a few allocations, to free in a lazy way
      * is actually just slower... So under a certain limit we just free
      * the object synchronously. */
+    // 在全局哈希表中异步删除被淘汰的键值对
     dictEntry *de = dictUnlink(db->dict,key->ptr);
     if (de) {
         robj *val = dictGetVal(de);
+        // 来计算释放被淘汰键值对内存空间的开销
+        // 根据要删除的键值对的类型，来计算删除开销。当键值对类型属于 List、Hash、Set 和 Sorted Set 这四种集合类型中的一种，并且没有使用紧凑型内存结构来保存的话，那么，这个键值对的删除开销就等于集合中的元素个数。否则的话，删除开销就等于 1。
         size_t free_effort = lazyfreeGetFreeEffort(val);
 
         /* If releasing the object is too much work, do it in the background
@@ -96,16 +100,19 @@ int dbAsyncDelete(redisDb *db, robj *key) {
          * objects, and then call dbDelete(). In this case we'll fall
          * through and reach the dictFreeUnlinkedEntry() call, that will be
          * equivalent to just calling decrRefCount(). */
+        // LAZYFREE_THRESHOLD 宏定义的默认值是 64
         if (free_effort > LAZYFREE_THRESHOLD && val->refcount == 1) {
             atomicIncr(lazyfree_objects,1);
+            // 开销较大，创建惰性删除任务，并交给后台线程来完成
             bioCreateBackgroundJob(BIO_LAZY_FREE,val,NULL,NULL);
-            dictSetVal(db->dict,de,NULL);
+            dictSetVal(db->dict,de,NULL); //将被淘汰键值对的value设置为NULL
         }
     }
 
     /* Release the key-val pair, or just the key if we set the val
      * field to NULL in order to lazy free it later. */
     if (de) {
+        // 主 IO 线程中进行同步删除
         dictFreeUnlinkedEntry(db->dict,de);
         if (server.cluster_enabled) slotToKeyDel(key);
         return 1;
