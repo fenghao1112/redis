@@ -1117,13 +1117,15 @@ long long getExpire(redisDb *db, robj *key) {
 void propagateExpire(redisDb *db, robj *key, int lazy) {
     robj *argv[2];
 
-    argv[0] = lazy ? shared.unlink : shared.del;
-    argv[1] = key;
+    argv[0] = lazy ? shared.unlink : shared.del; //如果server启用了lazyfree-lazy-evict，那么argv[0]的值为unlink对象，否则为del对象
+    argv[1] = key; //被淘汰的key对象
     incrRefCount(argv[0]);
     incrRefCount(argv[1]);
 
+    // 如果启用了AOF日志，则将删除操作写入AOF文件
     if (server.aof_state != AOF_OFF)
         feedAppendOnlyFile(server.delCommand,db->id,argv,2);
+    // 将删除操作同步给从节点
     replicationFeedSlaves(server.slaves,db->id,argv,2);
 
     decrRefCount(argv[0]);
