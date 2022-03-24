@@ -617,7 +617,7 @@ int freeMemoryIfNeeded(void) {
             latencyRemoveNestedEvent(latency,eviction_latency);
             // 计算本次释放的内存大小
             delta -= (long long) zmalloc_used_memory();
-            mem_freed += delta;
+            mem_freed += delta; //更新已释放的内存量
             server.stat_evictedkeys++;
             notifyKeyspaceEvent(NOTIFY_EVICTED, "evicted",
                 keyobj, db->id);
@@ -637,10 +637,12 @@ int freeMemoryIfNeeded(void) {
              * memory, since the "mem_freed" amount is computed only
              * across the dbAsyncDelete() call, while the thread can
              * release the memory all the time. */
+            // 如果使用了惰性删除，并且每删除16个key后，统计下当前内存使用量
             if (server.lazyfree_lazy_eviction && !(keys_freed % 16)) {
+                //计算当前内存使用量是否不超过最大内存容量
                 if (getMaxmemoryState(NULL,NULL,NULL,NULL) == C_OK) {
                     /* Let's satisfy our stop condition. */
-                    mem_freed = mem_tofree;
+                    mem_freed = mem_tofree; //如果满足最大容量要求，让已释放内存量等于待释放量，以便结束循环
                 }
             }
         }
