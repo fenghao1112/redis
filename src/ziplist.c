@@ -268,22 +268,30 @@
 /* We use this function to receive information about a ziplist entry.
  * Note that this is not how the data is actually encoded, is just what we
  * get filled by a function in order to operate more easily. */
+// 解码后的结构
 typedef struct zlentry {
+    // previous_entry_length字段的长度
     unsigned int prevrawlensize; /* Bytes used to encode the previous entry len*/
+    // previous_entry_length字段存储的内容
     unsigned int prevrawlen;     /* Previous entry len. */
+    // previous_entry_length字段存储的内容
     unsigned int lensize;        /* Bytes used to encode this entry type/len.
                                     For example strings have a 1, 2 or 5 bytes
                                     header. Integers always use a single byte.*/
+    // encoding中数据内容的长度                                
     unsigned int len;            /* Bytes used to represent the actual entry.
                                     For strings this is just the string length
                                     while for integers it is 1, 2, 3, 4, 8 or
                                     0 (for 4 bit immediate) depending on the
                                     number range. */
+    // 当前元素的首部长度，即previous_entry_length字段长度与encoding字段长度之和。                                    
     unsigned int headersize;     /* prevrawlensize + lensize. */
+    // 数据类型
     unsigned char encoding;      /* Set to ZIP_STR_* or ZIP_INT_* depending on
                                     the entry encoding. However for 4 bits
                                     immediate integers this can assume a range
                                     of values and must be range-checked. */
+    // 当前元素首地址                                
     unsigned char *p;            /* Pointer to the very start of the entry, that
                                     is, this points to prev-entry-len field. */
 } zlentry;

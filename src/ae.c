@@ -217,14 +217,17 @@ long long aeCreateTimeEvent(aeEventLoop *eventLoop, long long milliseconds,
 {
     long long id = eventLoop->timeEventNextId++;
     aeTimeEvent *te;
-
+    // 分配内存
     te = zmalloc(sizeof(*te));
     if (te == NULL) return AE_ERR;
     te->id = id;
+    // 计算所创建时间事件具体的触发时间戳，并赋值
     aeAddMillisecondsToNow(milliseconds,&te->when_sec,&te->when_ms);
+    // 设置回调函数
     te->timeProc = proc;
     te->finalizerProc = finalizerProc;
     te->clientData = clientData;
+    // 插入te到链表的头部
     te->prev = NULL;
     te->next = eventLoop->timeEventHead;
     if (te->next)
@@ -296,7 +299,7 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
     }
     eventLoop->lastTime = now;
 
-    te = eventLoop->timeEventHead;
+    te = eventLoop->timeEventHead; //从时间事件链表中取出事件
     maxId = eventLoop->timeEventNextId-1;
     while(te) {
         long now_sec, now_ms;
@@ -327,14 +330,14 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
             te = te->next;
             continue;
         }
-        aeGetTime(&now_sec, &now_ms);
+        aeGetTime(&now_sec, &now_ms); //获取当前时间
         if (now_sec > te->when_sec ||
-            (now_sec == te->when_sec && now_ms >= te->when_ms))
+            (now_sec == te->when_sec && now_ms >= te->when_ms)) //如果当前时间已经满足当前事件的触发时间戳
         {
             int retval;
 
             id = te->id;
-            retval = te->timeProc(eventLoop, id, te->clientData);
+            retval = te->timeProc(eventLoop, id, te->clientData); //调用注册的回调函数处理
             processed++;
             if (retval != AE_NOMORE) {
                 aeAddMillisecondsToNow(retval,&te->when_sec,&te->when_ms);
@@ -342,7 +345,7 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
                 te->id = AE_DELETED_EVENT_ID;
             }
         }
-        te = te->next;
+        te = te->next; //获取下一个时间事件
     }
     return processed;
 }
